@@ -69,12 +69,14 @@ jobs:
       - name: Generate root lockfile and SBOM
         run: |
           npm install --package-lock-only --ignore-scripts --no-audit
+          ls -l package-lock.json
           npx --yes @cyclonedx/cyclonedx-npm --package-lock-only --output-file /tmp/root-sbom.json
 
       - name: Generate frontend lockfile and SBOM
         run: |
           cd frontend
           npm install --package-lock-only --ignore-scripts --no-audit --legacy-peer-deps
+          ls -l package-lock.json
           npx --yes @cyclonedx/cyclonedx-npm --package-lock-only --output-file /tmp/frontend-sbom.json
 
       - name: Upload npm debug logs
