@@ -1,0 +1,11 @@
+rules:
+  - id: sequelize-interpolated-query
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Avoid interpolating values into Sequelize SQL queries.
+      Use parameterized queries and review whether input is attacker-controlled.
+    pattern: $DB.query(`...${...}...`, ...)
+    metadata:
+      category: security
+      cwe: "CWE-89"

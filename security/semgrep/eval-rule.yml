@@ -1,0 +1,11 @@
+rules:
+  - id: javascript-eval
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Avoid eval. Review whether untrusted input can reach this call
+      and replace dynamic code execution with a safer alternative.
+    pattern: eval($INPUT)
+    metadata:
+      category: security
+      cwe: "CWE-95"

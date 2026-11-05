@@ -1,0 +1,126 @@
+name: Security Assessment
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  sast:
+    name: Custom SAST
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Semgrep
+        run: python -m pip install semgrep==1.183.0
+
+      - name: Test custom rules
+        run: |
+          semgrep --test --config security/semgrep/eval-rule.yml security/semgrep/eval-rule.ts
+          semgrep --test --config security/semgrep/sql-rule.yml security/semgrep/sql-rule.ts
+
+      - name: Scan application routes
+        run: |
+          semgrep scan --error \
+            --config security/semgrep/eval-rule.yml \
+            --config security/semgrep/sql-rule.yml \
+            routes
+
+  secrets:
+    name: Secrets Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Gitleaks
+        run: |
+          wget -qO /tmp/gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+
+      - name: Scan tracked files for secrets
+        run: gitleaks detect --no-git --source . --redact --exit-code 1
+
+
+  dependencies:
+    name: Dependency Scan and SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install project npm version
+        run: npm install --global npm@11.19.1
+
+      - name: Install and build using project scripts
+        run: npm install
+
+      - name: Generate root SBOM
+        run: npx --yes @cyclonedx/cyclonedx-npm --output-file /tmp/root-sbom.json
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-sboms
+          path: |
+            /tmp/root-sbom.json
+            frontend/dist/bom/bom.json
+          if-no-files-found: error
+
+      - name: Audit root dependencies
+        if: always()
+        id: root-audit
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+      - name: Audit frontend dependencies
+        if: always()
+        id: frontend-audit
+        continue-on-error: true
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+      - name: Enforce audit results
+        if: always()
+        env:
+          ROOT_OUTCOME: ${{ steps.root-audit.outcome }}
+          FRONTEND_OUTCOME: ${{ steps.frontend-audit.outcome }}
+        run: |
+          test "$ROOT_OUTCOME" = success && test "$FRONTEND_OUTCOME" = success
+
+  container:
+    name: Container Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build hardened image
+        run: docker build -f Dockerfile.hardened -t juice-shop:hardened .
+
+      - name: Scan image with Trivy
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.59.1 image \
+            --db-repository ghcr.io/aquasecurity/trivy-db:2 \
+            --scanners vuln --severity HIGH,CRITICAL \
+            --exit-code 1 juice-shop:hardened
