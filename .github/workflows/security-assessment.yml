@@ -116,3 +116,24 @@ jobs:
           FRONTEND_OUTCOME: ${{ steps.frontend-audit.outcome }}
         run: |
           test "$ROOT_OUTCOME" = success && test "$FRONTEND_OUTCOME" = success
+
+  frontend-sbom-test:
+    name: Frontend SBOM Build Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install project npm version
+        run: npm install --global npm@11.19.1
+
+      - name: Install and build using project scripts
+        run: npm install
+
+      - name: Find generated frontend SBOM
+        run: find frontend -type f -iname '*sbom*' -not -path '*/node_modules/*'
