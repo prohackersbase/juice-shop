@@ -53,3 +53,51 @@ jobs:
 
       - name: Scan tracked files for secrets
         run: gitleaks detect --no-git --source . --redact --exit-code 1
+
+  dependencies:
+    name: Dependency Scan and SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Generate temporary lockfiles
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit
+          npm install --prefix frontend --package-lock-only --ignore-scripts --no-audit
+
+      - name: Generate SBOMs
+        run: |
+          npm sbom --package-lock-only --sbom-format cyclonedx > /tmp/root-sbom.json
+          npm sbom --prefix frontend --package-lock-only --sbom-format cyclonedx > /tmp/frontend-sbom.json
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-sboms
+          path: |
+            /tmp/root-sbom.json
+            /tmp/frontend-sbom.json
+
+      - name: Audit root dependencies
+        id: root-audit
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+      - name: Audit frontend dependencies
+        id: frontend-audit
+        continue-on-error: true
+        run: npm audit --prefix frontend --audit-level=high
+
+      - name: Enforce audit results
+        if: always()
+        env:
+          ROOT_OUTCOME: ${{ steps.root-audit.outcome }}
+          FRONTEND_OUTCOME: ${{ steps.frontend-audit.outcome }}
+        run: |
+          test "$ROOT_OUTCOME" = success && test "$FRONTEND_OUTCOME" = success
