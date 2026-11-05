@@ -54,71 +54,9 @@ jobs:
       - name: Scan tracked files for secrets
         run: gitleaks detect --no-git --source . --redact --exit-code 1
 
+
   dependencies:
     name: Dependency Scan and SBOM
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Generate root lockfile and SBOM
-        run: |
-          npm install --package-lock-only --ignore-scripts --no-audit
-          ls -l package-lock.json
-          npx --yes @cyclonedx/cyclonedx-npm --package-lock-only --output-file /tmp/root-sbom.json
-
-      - name: Generate frontend lockfile and SBOM
-        run: |
-          cd frontend
-          npm install --package-lock-only --ignore-scripts --no-audit --legacy-peer-deps
-          ls -l package-lock.json
-          npx --yes @cyclonedx/cyclonedx-npm --package-lock-only --output-file /tmp/frontend-sbom.json
-
-      - name: Upload npm debug logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-debug-logs
-          path: ~/.npm/_logs/*-debug-0.log
-          if-no-files-found: warn
-
-
-      - name: Upload SBOMs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-sboms
-          path: |
-            /tmp/root-sbom.json
-            /tmp/frontend-sbom.json
-
-      - name: Audit root dependencies
-        if: always()
-        id: root-audit
-        continue-on-error: true
-        run: npm audit --audit-level=high
-
-      - name: Audit frontend dependencies
-        if: always()
-        id: frontend-audit
-        continue-on-error: true
-        run: npm audit --prefix frontend --audit-level=high
-
-      - name: Enforce audit results
-        if: always()
-        env:
-          ROOT_OUTCOME: ${{ steps.root-audit.outcome }}
-          FRONTEND_OUTCOME: ${{ steps.frontend-audit.outcome }}
-        run: |
-          test "$ROOT_OUTCOME" = success && test "$FRONTEND_OUTCOME" = success
-
-  frontend-sbom-test:
-    name: Frontend SBOM Build Test
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -135,16 +73,35 @@ jobs:
       - name: Install and build using project scripts
         run: npm install
 
-      - name: Find generated frontend SBOM
-        run: find frontend -type f -iname '*sbom*' -not -path '*/node_modules/*'
+      - name: Generate root SBOM
+        run: npx --yes @cyclonedx/cyclonedx-npm --output-file /tmp/root-sbom.json
 
-      - name: Upload frontend SBOM
+      - name: Upload SBOMs
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-build-sbom
-          path: frontend/dist/bom/bom.json
+          name: dependency-sboms
+          path: |
+            /tmp/root-sbom.json
+            frontend/dist/bom/bom.json
           if-no-files-found: error
 
+      - name: Audit root dependencies
+        if: always()
+        id: root-audit
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
       - name: Audit frontend dependencies
+        if: always()
+        id: frontend-audit
+        continue-on-error: true
         working-directory: frontend
         run: npm audit --audit-level=high
+
+      - name: Enforce audit results
+        if: always()
+        env:
+          ROOT_OUTCOME: ${{ steps.root-audit.outcome }}
+          FRONTEND_OUTCOME: ${{ steps.frontend-audit.outcome }}
+        run: |
+          test "$ROOT_OUTCOME" = success && test "$FRONTEND_OUTCOME" = success
