@@ -144,3 +144,7 @@ jobs:
           name: frontend-build-sbom
           path: frontend/dist/bom/bom.json
           if-no-files-found: error
+
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high
