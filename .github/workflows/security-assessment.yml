@@ -98,11 +98,13 @@ jobs:
             /tmp/frontend-sbom.json
 
       - name: Audit root dependencies
+        if: always()
         id: root-audit
         continue-on-error: true
         run: npm audit --audit-level=high
 
       - name: Audit frontend dependencies
+        if: always()
         id: frontend-audit
         continue-on-error: true
         run: npm audit --prefix frontend --audit-level=high
