@@ -105,3 +105,22 @@ jobs:
           FRONTEND_OUTCOME: ${{ steps.frontend-audit.outcome }}
         run: |
           test "$ROOT_OUTCOME" = success && test "$FRONTEND_OUTCOME" = success
+
+  container:
+    name: Container Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build hardened image
+        run: docker build -f Dockerfile.hardened -t juice-shop:hardened .
+
+      - name: Scan image with Trivy
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.59.1 image \
+            --db-repository ghcr.io/aquasecurity/trivy-db:2 \
+            --scanners vuln --severity HIGH,CRITICAL \
+            --exit-code 1 juice-shop:hardened
