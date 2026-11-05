@@ -137,3 +137,10 @@ jobs:
 
       - name: Find generated frontend SBOM
         run: find frontend -type f -iname '*sbom*' -not -path '*/node_modules/*'
+
+      - name: Upload frontend SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build-sbom
+          path: frontend/dist/bom/bom.json
+          if-no-files-found: error
