@@ -66,10 +66,16 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Generate temporary lockfiles
+      - name: Generate root lockfile and SBOM
         run: |
           npm install --package-lock-only --ignore-scripts --no-audit
-          (cd frontend && npm install --package-lock-only --ignore-scripts --no-audit --legacy-peer-deps)
+          npx --yes @cyclonedx/cyclonedx-npm --package-lock-only --output-file /tmp/root-sbom.json
+
+      - name: Generate frontend lockfile and SBOM
+        run: |
+          cd frontend
+          npm install --package-lock-only --ignore-scripts --no-audit --legacy-peer-deps
+          npx --yes @cyclonedx/cyclonedx-npm --package-lock-only --output-file /tmp/frontend-sbom.json
 
       - name: Upload npm debug logs
         if: failure()
@@ -79,11 +85,6 @@ jobs:
           path: ~/.npm/_logs/*-debug-0.log
           if-no-files-found: warn
 
-      - name: Generate SBOMs
-        run: |
-          npx --yes @cyclonedx/cyclonedx-npm --package-lock-only --output-file /tmp/root-sbom.json
-          cd frontend
-          npx --yes @cyclonedx/cyclonedx-npm --package-lock-only --output-file /tmp/frontend-sbom.json
 
       - name: Upload SBOMs
         uses: actions/upload-artifact@v4
